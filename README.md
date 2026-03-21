@@ -116,6 +116,26 @@ TP, FP1, FP2, TN, FN are defined as below:
 
 3. If you want to load pre-labeled csv file, change `load_csv` in `imgLabel.py` to **True**.    
 4. After label all frames, press `s` to save file and then press `e` to leave the program.
+
+### Web Label
+If you prefer labeling in a browser, run:
+
+```bash
+python web_label.py --label_video_path test/test.mp4 --csv_path test/test.csv
+```
+
+Then open `http://127.0.0.1:8000/`.
+
+Features:
+- Click on the frame to label the shuttlecock center
+- Right click or press `C` to mark current frame as no-ball
+- `←` / `→` for previous / next frame
+- `Shift + ←` / `Shift + →` for jump by 36 frames
+- `⌘ + ←` / `⌘ + →` to jump to first / last frame on Mac
+- `[` / `]` as an alternative for first / last frame
+- `S` to save, `U` to jump to the next unlabeled frame
+- Shows current csv file path and overall labeling progress
+- Autosaves shortly after edits for better usability
 ## Train
 folder architecture:    
 ```
