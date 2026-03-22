@@ -118,24 +118,89 @@ TP, FP1, FP2, TN, FN are defined as below:
 4. After label all frames, press `s` to save file and then press `e` to leave the program.
 
 ### Web Label
-If you prefer labeling in a browser, run:
+If you prefer labeling in a browser, use the web-based labeling UI.
+
+#### Start
+
+Run:
 
 ```bash
 python web_label.py --label_video_path test/test.mp4 --csv_path test/test.csv
 ```
 
-Then open `http://127.0.0.1:8000/`.
+Then open `http://127.0.0.1:8000/` in your browser.
 
-Features:
+Optional arguments:
+
+- `--label_video_path`: input video path to label
+- `--csv_path`: output csv path to load/save labels
+- `--host`: server host, default is `127.0.0.1`
+- `--port`: server port, default is `8000`
+
+If `--csv_path` is not provided, the tool will save to a csv file with the same name as the video.
+
+#### UI Features
+
+- Display current video file and current labeling csv file
+- Display overall labeling progress
+- Display current frame number and current frame label status
 - Click on the frame to label the shuttlecock center
-- Right click or press `C` to mark current frame as no-ball
-- `←` / `→` for previous / next frame
-- `Shift + ←` / `Shift + →` for jump by 36 frames
-- `⌘ + ←` / `⌘ + →` to jump to first / last frame on Mac
-- `[` / `]` as an alternative for first / last frame
-- `S` to save, `U` to jump to the next unlabeled frame
-- Shows current csv file path and overall labeling progress
-- Autosaves shortly after edits for better usability
+- Mark a frame as no-ball
+- Jump to the next unchecked frame
+- Fast navigation between frames
+- Autosave after editing for better usability
+- Support responsive browser layout for easier use on different screen sizes
+
+#### Label Status
+
+In the web UI, each frame can be in one of the following states:
+
+- `已标注有球`: the ball is visible and a center point is labeled
+- `已检查无球`: the frame has been reviewed and marked as no-ball
+- `未检查`: the frame has not been reviewed yet
+
+#### Mouse Actions
+
+|Mouse Event|Function|
+|-----------|--------|
+|Left click|Label center of the ball|
+|Right click|Mark current frame as no-ball|
+
+#### Keyboard Shortcuts
+
+|Keyboard Event|Function|
+|--------------|--------|
+|`←` / `→`|Previous / next frame|
+|`Shift + ←` / `Shift + →`|Fast backward / forward 36 frames|
+|`⌘ + ←` / `⌘ + →`|Jump to first / last frame on Mac|
+|`[` / `]`|Alternative shortcut for first / last frame|
+|`S`|Save current labels|
+|`C`|Mark current frame as no-ball|
+|`U`|Jump to next unchecked frame|
+
+#### Output Files
+
+The web label tool writes:
+
+- `xxx.csv`: main label file, compatible with the existing training pipeline
+- `xxx.csv.weblabel.json`: sidecar progress file used by the web UI to distinguish:
+  - checked no-ball frames
+  - unchecked frames
+
+The csv format remains:
+
+```text
+Frame,Ball,x,y
+```
+
+#### Recommended Workflow
+
+1. Start the server with `python web_label.py --label_video_path <video> --csv_path <csv>`.
+2. Open the browser page.
+3. Click frames with visible shuttlecock to label the center point.
+4. For frames without visible shuttlecock, use right click or press `C`.
+5. Use `U` to continue with the next unchecked frame.
+6. Press `S` to save manually when needed. The UI also autosaves after edits.
 ## Train
 folder architecture:    
 ```
