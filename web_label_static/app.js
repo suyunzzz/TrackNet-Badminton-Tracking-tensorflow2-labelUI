@@ -1,12 +1,12 @@
 const state = {
+  ready: false,
   frameCount: 0,
   frameIndex: 0,
-  width: 0,
-  height: 0,
-  fps: 0,
+  width: 1280,
+  height: 720,
   labelHz: 10,
   labelStep: 1,
-  annotation: { ball: 0, x: -1, y: -1, labeled: false },
+  annotation: { ball: 0, x: -1, y: -1, labeled: false, reviewed: false },
   dirty: false,
   image: null,
   saveTimer: null,
@@ -33,6 +33,8 @@ const els = {
   frameCanvas: document.getElementById('frameCanvas'),
   loadingMask: document.getElementById('loadingMask'),
   toast: document.getElementById('toast'),
+  pickVideoBtn: document.getElementById('pickVideoBtn'),
+  replaceVideoBtn: document.getElementById('replaceVideoBtn'),
   saveBtn: document.getElementById('saveBtn'),
   clearBtn: document.getElementById('clearBtn'),
   nextUnlabeledBtn: document.getElementById('nextUnlabeledBtn'),
@@ -43,6 +45,8 @@ const els = {
   nextFastBtn: document.getElementById('nextFastBtn'),
   lastBtn: document.getElementById('lastBtn'),
   jumpBtn: document.getElementById('jumpBtn'),
+  emptyState: document.getElementById('emptyState'),
+  workspace: document.getElementById('workspace'),
 };
 
 const ctx = els.frameCanvas.getContext('2d');
@@ -54,7 +58,7 @@ async function api(url, options = {}) {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || 'Request failed');
+    throw new Error(payload.error || '请求失败');
   }
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -65,10 +69,10 @@ async function api(url, options = {}) {
 
 function showToast(message, isError = false) {
   els.toast.textContent = message;
-  els.toast.style.background = isError ? 'rgba(216, 61, 61, 0.94)' : 'rgba(24, 33, 47, 0.92)';
+  els.toast.classList.toggle('error', isError);
   els.toast.classList.add('show');
   clearTimeout(state.toastTimer);
-  state.toastTimer = setTimeout(() => els.toast.classList.remove('show'), 1800);
+  state.toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2200);
 }
 
 function setLoading(loading) {
@@ -80,26 +84,34 @@ function clampFrame(index) {
   return Math.max(0, Math.min(index, state.frameCount - 1));
 }
 
-function labelStep() {
+function stepSize() {
   return Math.max(1, Number(state.labelStep) || 1);
+}
+
+function setReadyMode(ready) {
+  state.ready = ready;
+  els.emptyState.classList.toggle('hidden', ready);
+  els.workspace.classList.toggle('hidden', !ready);
+  els.replaceVideoBtn.disabled = !ready;
+  els.saveBtn.disabled = !ready;
 }
 
 function renderCanvas() {
   ctx.clearRect(0, 0, els.frameCanvas.width, els.frameCanvas.height);
-  if (state.image) {
-    ctx.drawImage(state.image, 0, 0, els.frameCanvas.width, els.frameCanvas.height);
-  }
-  if (state.annotation.labeled) {
-    const x = state.annotation.x * els.frameCanvas.width;
-    const y = state.annotation.y * els.frameCanvas.height;
-    ctx.beginPath();
-    ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff4d4f';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
-  }
+  if (!state.image) return;
+
+  ctx.drawImage(state.image, 0, 0, els.frameCanvas.width, els.frameCanvas.height);
+  if (!state.annotation.labeled) return;
+
+  const x = state.annotation.x * els.frameCanvas.width;
+  const y = state.annotation.y * els.frameCanvas.height;
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff5a4f';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
 }
 
 function updateAnnotationPanel() {
@@ -125,31 +137,33 @@ function updateProgress(progress) {
 function updateDirty(dirty) {
   state.dirty = dirty;
   els.dirtyText.textContent = dirty ? '未保存' : '已保存';
-  els.dirtyText.style.color = dirty ? '#d83d3d' : '#18864b';
+  els.dirtyText.classList.toggle('danger-text', dirty);
 }
 
-async function loadState() {
-  const payload = await api('/api/state');
+function applyState(payload) {
+  setReadyMode(Boolean(payload.ready));
   state.frameCount = payload.frame_count;
   state.width = payload.width;
   state.height = payload.height;
-  state.fps = Number(payload.fps) || 0;
   state.labelHz = Number(payload.label_hz) || 10;
   state.labelStep = Number(payload.label_step) || 1;
-  els.videoName.textContent = payload.video_name;
-  els.csvPath.textContent = payload.csv_path;
-  if (els.labelRateText) {
-    els.labelRateText.textContent = `${state.labelHz.toFixed(2)} Hz`;
-  }
-  if (els.labelStepText) {
-    els.labelStepText.textContent = `step ${labelStep()} frame(s)`;
-  }
+
+  els.videoName.textContent = payload.video_name || '未选择';
+  els.csvPath.textContent = payload.csv_path || '将自动生成同名 csv';
+  els.labelRateText.textContent = `${state.labelHz.toFixed(2)} Hz`;
+  els.labelStepText.textContent = `每 ${stepSize()} 帧标注一次`;
   els.frameSlider.max = String(Math.max(payload.frame_count - 1, 0));
   els.frameInput.max = String(Math.max(payload.frame_count - 1, 0));
   els.frameCanvas.width = payload.width;
   els.frameCanvas.height = payload.height;
   updateProgress(payload.progress);
   updateDirty(payload.dirty);
+}
+
+async function loadState() {
+  const payload = await api('/api/state');
+  applyState(payload);
+  return payload;
 }
 
 async function loadFrame(frameIndex) {
@@ -200,6 +214,13 @@ async function saveCurrent(showMessage = true) {
   }
 }
 
+async function goNextAfterMarking() {
+  const nextFrame = clampFrame(state.frameIndex + stepSize());
+  if (nextFrame !== state.frameIndex) {
+    await loadFrame(nextFrame);
+  }
+}
+
 async function annotateCurrent(normalizedX, normalizedY) {
   const payload = await api('/api/annotate', {
     method: 'POST',
@@ -211,6 +232,7 @@ async function annotateCurrent(normalizedX, normalizedY) {
   renderCanvas();
   updateAnnotationPanel();
   scheduleAutosave();
+  await goNextAfterMarking();
 }
 
 async function clearCurrent(showMessage = true) {
@@ -224,19 +246,36 @@ async function clearCurrent(showMessage = true) {
   renderCanvas();
   updateAnnotationPanel();
   scheduleAutosave();
-  if (showMessage) showToast('当前帧已标记为无球');
+  if (showMessage) {
+    showToast('当前帧已标记为无球');
+  }
+  await goNextAfterMarking();
 }
 
 async function jumpToNextUnlabeled() {
   const payload = await api(`/api/next_unlabeled?from=${state.frameIndex}&direction=1`);
   if (!payload.found) {
-    showToast('后续帧都已检查完');
+    showToast('后续采样帧都已经检查完成');
     return;
   }
   await loadFrame(payload.frame);
 }
 
+async function chooseVideo() {
+  setLoading(true);
+  try {
+    const payload = await api('/api/select_video', { method: 'POST', body: '{}' });
+    applyState({ ...payload, ready: true });
+    state.frameIndex = 0;
+    await loadFrame(0);
+    showToast('视频已加载，可以开始标注了');
+  } finally {
+    setLoading(false);
+  }
+}
+
 function onCanvasClick(event) {
+  if (!state.ready) return;
   const rect = els.frameCanvas.getBoundingClientRect();
   const x = (event.clientX - rect.left) / rect.width;
   const y = (event.clientY - rect.top) / rect.height;
@@ -244,21 +283,24 @@ function onCanvasClick(event) {
 }
 
 function bindActions() {
+  els.pickVideoBtn.addEventListener('click', () => chooseVideo().catch((error) => showToast(error.message, true)));
+  els.replaceVideoBtn.addEventListener('click', () => chooseVideo().catch((error) => showToast(error.message, true)));
+  els.saveBtn.addEventListener('click', () => saveCurrent(true).catch((error) => showToast(error.message, true)));
+
   els.frameCanvas.addEventListener('click', onCanvasClick);
   els.frameCanvas.addEventListener('contextmenu', (event) => {
     event.preventDefault();
+    if (!state.ready) return;
     clearCurrent(false).catch((error) => showToast(error.message, true));
   });
 
-  els.saveBtn.addEventListener('click', () => saveCurrent(true).catch((error) => showToast(error.message, true)));
   els.clearBtn.addEventListener('click', () => clearCurrent(true).catch((error) => showToast(error.message, true)));
   els.nextUnlabeledBtn.addEventListener('click', () => jumpToNextUnlabeled().catch((error) => showToast(error.message, true)));
-
   els.firstBtn.addEventListener('click', () => loadFrame(0).catch((error) => showToast(error.message, true)));
-  els.prevBtn.addEventListener('click', () => loadFrame(state.frameIndex - labelStep()).catch((error) => showToast(error.message, true)));
-  els.nextBtn.addEventListener('click', () => loadFrame(state.frameIndex + labelStep()).catch((error) => showToast(error.message, true)));
-  els.prevFastBtn.addEventListener('click', () => loadFrame(state.frameIndex - (36 * labelStep())).catch((error) => showToast(error.message, true)));
-  els.nextFastBtn.addEventListener('click', () => loadFrame(state.frameIndex + (36 * labelStep())).catch((error) => showToast(error.message, true)));
+  els.prevBtn.addEventListener('click', () => loadFrame(state.frameIndex - stepSize()).catch((error) => showToast(error.message, true)));
+  els.nextBtn.addEventListener('click', () => loadFrame(state.frameIndex + stepSize()).catch((error) => showToast(error.message, true)));
+  els.prevFastBtn.addEventListener('click', () => loadFrame(state.frameIndex - (36 * stepSize())).catch((error) => showToast(error.message, true)));
+  els.nextFastBtn.addEventListener('click', () => loadFrame(state.frameIndex + (36 * stepSize())).catch((error) => showToast(error.message, true)));
   els.lastBtn.addEventListener('click', () => loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true)));
 
   els.frameSlider.addEventListener('input', () => {
@@ -277,33 +319,22 @@ function bindActions() {
   });
 
   window.addEventListener('keydown', (event) => {
+    if (!state.ready) return;
     const activeTag = document.activeElement?.tagName;
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
-    if (event.metaKey && event.key === 'ArrowLeft') {
+    if (event.key === '[' || (event.metaKey && event.key === 'ArrowLeft')) {
       event.preventDefault();
       loadFrame(0).catch((error) => showToast(error.message, true));
-    } else if (event.metaKey && event.key === 'ArrowRight') {
-      event.preventDefault();
-      loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true));
-    } else if (event.key === '[') {
-      event.preventDefault();
-      loadFrame(0).catch((error) => showToast(error.message, true));
-    } else if (event.key === ']') {
+    } else if (event.key === ']' || (event.metaKey && event.key === 'ArrowRight')) {
       event.preventDefault();
       loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true));
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
-      loadFrame(state.frameIndex + (event.shiftKey ? 36 * labelStep() : labelStep())).catch((error) => showToast(error.message, true));
+      loadFrame(state.frameIndex + (event.shiftKey ? 36 * stepSize() : stepSize())).catch((error) => showToast(error.message, true));
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      loadFrame(state.frameIndex - (event.shiftKey ? 36 * labelStep() : labelStep())).catch((error) => showToast(error.message, true));
-    } else if (event.key === 'Home') {
-      event.preventDefault();
-      loadFrame(0).catch((error) => showToast(error.message, true));
-    } else if (event.key === 'End') {
-      event.preventDefault();
-      loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true));
+      loadFrame(state.frameIndex - (event.shiftKey ? 36 * stepSize() : stepSize())).catch((error) => showToast(error.message, true));
     } else if (event.key.toLowerCase() === 's') {
       event.preventDefault();
       saveCurrent(true).catch((error) => showToast(error.message, true));
@@ -326,8 +357,10 @@ function bindActions() {
 async function init() {
   try {
     bindActions();
-    await loadState();
-    await loadFrame(0);
+    const payload = await loadState();
+    if (payload.ready) {
+      await loadFrame(0);
+    }
   } catch (error) {
     showToast(error.message, true);
   }

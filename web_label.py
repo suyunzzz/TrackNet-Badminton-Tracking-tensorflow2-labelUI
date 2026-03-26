@@ -2,6 +2,7 @@ import json
 import mimetypes
 import os
 import threading
+import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -42,6 +43,23 @@ def compute_label_step(fps, label_hz):
     if fps <= 0:
         return 1
     return max(1, int(round(float(fps) / float(label_hz))))
+
+
+def choose_video_file():
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    try:
+        video_path = filedialog.askopenfilename(
+            title='选择要标注的视频',
+            filetypes=[('MP4 视频', '*.mp4'), ('所有文件', '*.*')],
+        )
+    finally:
+        root.destroy()
+    return video_path
 
 
 class LabelSession:
@@ -235,8 +253,94 @@ class LabelSession:
         return max(0, min(aligned, self.n_frames - 1))
 
 
+class SessionManager:
+    def __init__(self, label_hz):
+        self.label_hz = float(label_hz)
+        self.lock = threading.Lock()
+        self.session = None
+
+    def load_video(self, video_path, csv_path=''):
+        if not os.path.isfile(video_path) or not video_path.lower().endswith('.mp4'):
+            raise ValueError('请选择一个有效的 mp4 视频文件。')
+
+        new_session = LabelSession(video_path, csv_path, self.label_hz)
+        with self.lock:
+            old_session = self.session
+            self.session = new_session
+
+        if old_session is not None:
+            old_session.cap.release()
+        return new_session.get_state()
+
+    def select_video(self):
+        video_path = choose_video_file()
+        if not video_path:
+            raise ValueError('你还没有选择视频。')
+        return self.load_video(video_path)
+
+    def get_state(self):
+        with self.lock:
+            session = self.session
+        if session is None:
+            return {
+                'ready': False,
+                'video_path': '',
+                'video_name': '',
+                'csv_path': '',
+                'fps': 0.0,
+                'label_hz': self.label_hz,
+                'label_step': 1,
+                'frame_count': 0,
+                'width': 1280,
+                'height': 720,
+                'progress': {
+                    'labeled': 0,
+                    'positive': 0,
+                    'unlabeled': 0,
+                    'total': 0,
+                    'percent': 0.0,
+                },
+                'dirty': False,
+            }
+        payload = session.get_state()
+        payload['ready'] = True
+        return payload
+
+    def _require_session(self):
+        with self.lock:
+            session = self.session
+        if session is None:
+            raise ValueError('请先选择一个视频。')
+        return session
+
+    def get_annotation(self, frame_no):
+        return self._require_session().get_annotation(frame_no)
+
+    def set_annotation(self, frame_no, x, y):
+        return self._require_session().set_annotation(frame_no, x, y)
+
+    def clear_annotation(self, frame_no):
+        return self._require_session().clear_annotation(frame_no)
+
+    def save(self):
+        return self._require_session().save()
+
+    def next_unlabeled(self, current_frame, direction=1):
+        return self._require_session().next_unlabeled(current_frame, direction)
+
+    def get_frame_bytes(self, frame_no):
+        return self._require_session().get_frame_bytes(frame_no)
+
+    def close(self):
+        with self.lock:
+            session = self.session
+            self.session = None
+        if session is not None:
+            session.cap.release()
+
+
 class LabelRequestHandler(BaseHTTPRequestHandler):
-    session = None
+    manager = None
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web_label_static')
 
     def do_GET(self):
@@ -250,18 +354,18 @@ class LabelRequestHandler(BaseHTTPRequestHandler):
                 rel_path = path[len('/static/'):]
                 return self._serve_static(rel_path)
             if path == '/api/state':
-                return self._send_json(self.session.get_state())
+                return self._send_json(self.manager.get_state())
             if path == '/api/frame':
                 frame_no = self._query_int(query, 'index')
-                data = self.session.get_frame_bytes(frame_no)
+                data = self.manager.get_frame_bytes(frame_no)
                 return self._send_bytes(data, 'image/jpeg')
             if path == '/api/annotation':
                 frame_no = self._query_int(query, 'index')
-                return self._send_json(self.session.get_annotation(frame_no))
+                return self._send_json(self.manager.get_annotation(frame_no))
             if path == '/api/next_unlabeled':
                 frame_no = self._query_int(query, 'from')
                 direction = int(query.get('direction', ['1'])[0])
-                return self._send_json(self.session.next_unlabeled(frame_no, direction))
+                return self._send_json(self.manager.next_unlabeled(frame_no, direction))
             self._send_error(HTTPStatus.NOT_FOUND, 'Not found')
         except Exception as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -271,16 +375,18 @@ class LabelRequestHandler(BaseHTTPRequestHandler):
         path = parsed.path
         try:
             payload = self._read_json_body()
+            if path == '/api/select_video':
+                return self._send_json(self.manager.select_video())
             if path == '/api/annotate':
                 frame_no = int(payload['frame'])
                 x = float(payload['x'])
                 y = float(payload['y'])
-                return self._send_json(self.session.set_annotation(frame_no, x, y))
+                return self._send_json(self.manager.set_annotation(frame_no, x, y))
             if path == '/api/clear':
                 frame_no = int(payload['frame'])
-                return self._send_json(self.session.clear_annotation(frame_no))
+                return self._send_json(self.manager.clear_annotation(frame_no))
             if path == '/api/save':
-                return self._send_json(self.session.save())
+                return self._send_json(self.manager.save())
             self._send_error(HTTPStatus.NOT_FOUND, 'Not found')
         except Exception as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -332,17 +438,21 @@ class LabelRequestHandler(BaseHTTPRequestHandler):
 def main():
     args = parser.parse_args()
     video_path = args.label_video_path
-    if not os.path.isfile(video_path) or not video_path.endswith('.mp4'):
-        raise ValueError('Not a valid video path! Please modify --label_video_path.')
+    manager = SessionManager(args.label_hz)
+    if video_path and os.path.isfile(video_path) and video_path.endswith('.mp4'):
+        manager.load_video(video_path, args.csv_path)
 
-    session = LabelSession(video_path, args.csv_path, args.label_hz)
-    LabelRequestHandler.session = session
+    LabelRequestHandler.manager = manager
     server = ThreadingHTTPServer((args.host, args.port), LabelRequestHandler)
     url = 'http://{}:{}/'.format(args.host, args.port)
+    threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     print('Web label server is running at {}'.format(url))
-    print('Video: {}'.format(session.video_path))
-    print('CSV  : {}'.format(session.csv_path))
-    print('Label: {:.3f} Hz, step {} frame(s)'.format(session.label_hz, session.label_step))
+    if manager.session is not None:
+        print('Video: {}'.format(manager.session.video_path))
+        print('CSV  : {}'.format(manager.session.csv_path))
+        print('Label: {:.3f} Hz, step {} frame(s)'.format(manager.session.label_hz, manager.session.label_step))
+    else:
+        print('Video: waiting for user selection in the browser.')
     print('Keyboard shortcuts are available inside the page.')
     try:
         server.serve_forever()
@@ -350,7 +460,7 @@ def main():
         print('\nStop web label server.')
     finally:
         server.server_close()
-        session.cap.release()
+        manager.close()
 
 
 if __name__ == '__main__':

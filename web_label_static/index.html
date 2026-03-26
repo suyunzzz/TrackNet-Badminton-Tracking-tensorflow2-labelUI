@@ -3,106 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TrackNet Web Label</title>
+    <title>羽毛球标注工具</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="topbar card">
-        <div>
-          <p class="eyebrow">TrackNet 标注器</p>
-          <h1>网页标注界面</h1>
-          <div class="meta-list">
-            <div><span>视频文件</span><strong id="videoName">-</strong></div>
-            <div><span>标注文件</span><strong id="csvPath">-</strong></div>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Badminton Labeler</p>
+          <h1>打开即用的羽毛球视频标注工具</h1>
+          <p class="hero-text">
+            不需要命令行。打开工具后，点击“选择视频”，系统会自动创建或读取同名标注文件，
+            然后你就可以直接开始标注。
+          </p>
+          <div class="hero-actions">
+            <button id="pickVideoBtn" class="primary">选择视频开始</button>
+            <button id="replaceVideoBtn" class="secondary">更换视频</button>
+            <button id="saveBtn" class="secondary">立即保存</button>
           </div>
         </div>
-        <div class="progress-panel">
-          <div class="progress-header">
-            <span>标注进度</span>
-            <strong id="progressText">0 / 0</strong>
+
+        <div class="hero-card">
+          <div class="hero-card-row">
+            <span>当前视频</span>
+            <strong id="videoName">未选择</strong>
           </div>
-          <div class="progress-bar"><div id="progressFill"></div></div>
-          <div class="progress-meta">
-            <span id="percentText">0%</span>
-            <span id="dirtyText">已保存</span>
+          <div class="hero-card-row">
+            <span>标注文件</span>
+            <strong id="csvPath">将自动生成同名 csv</strong>
           </div>
-          <div class="progress-meta">
-            <span id="labelRateText">10.00 Hz</span>
-            <span id="labelStepText">step 1 frame(s)</span>
+          <div class="hero-card-row">
+            <span>标注频率</span>
+            <strong id="labelRateText">10.00 Hz</strong>
+          </div>
+          <div class="hero-card-row">
+            <span>采样步长</span>
+            <strong id="labelStepText">step 1 frame(s)</strong>
           </div>
         </div>
       </header>
 
-      <main class="layout">
+      <section id="emptyState" class="empty-state card">
+        <div class="empty-art"></div>
+        <h2>先选一个视频，再开始标注</h2>
+        <p>
+          点击“选择视频开始”，挑选一个 `.mp4` 文件。工具会自动打开它，并优先读取同目录下的同名
+          `.csv` 标注文件；如果没有，就新建一个。
+        </p>
+        <div class="empty-points">
+          <span>左键点击球心</span>
+          <span>右键标记当前帧无球</span>
+          <span>标注后自动跳到下一帧</span>
+        </div>
+      </section>
+
+      <main id="workspace" class="workspace hidden">
         <section class="viewer card">
-          <div class="viewer-toolbar">
-            <div class="frame-summary">
-              <strong id="frameIndicator">Frame 0 / 0</strong>
-              <span id="frameStatus" class="status-pill">未检查</span>
+          <div class="viewer-top">
+            <div>
+              <div class="frame-title">
+                <strong id="frameIndicator">Frame 0 / 0</strong>
+                <span id="frameStatus" class="status-pill">未检查</span>
+              </div>
+              <p class="viewer-tip">左键标球，右键标记无球。每次标注后会自动跳到下一采样帧。</p>
             </div>
-            <div class="actions compact">
-              <button id="saveBtn" class="primary">保存 (S)</button>
-              <button id="clearBtn">标记无球 (C)</button>
-              <button id="nextUnlabeledBtn">下一未标注 (U)</button>
+            <div class="top-actions">
+              <button id="clearBtn">当前帧无球</button>
+              <button id="nextUnlabeledBtn">跳到下一未标注</button>
             </div>
           </div>
 
           <div class="canvas-wrap">
             <canvas id="frameCanvas"></canvas>
-            <div id="loadingMask" class="loading-mask">正在加载帧...</div>
-          </div>
-
-          <div class="tips">
-            <span>左键点击：标注球心</span>
-            <span>右键点击：标记当前帧无球</span>
-            <span>方向键按当前标注频率步进，Shift + 方向键为 36 个标注步长</span>
+            <div id="loadingMask" class="loading-mask">正在加载画面...</div>
           </div>
         </section>
 
-        <aside class="sidebar card">
-          <section>
+        <aside class="sidebar">
+          <section class="card panel">
+            <h2>整体进度</h2>
+            <div class="progress-header">
+              <strong id="progressText">0 / 0</strong>
+              <span id="percentText">0%</span>
+            </div>
+            <div class="progress-bar"><div id="progressFill"></div></div>
+            <div class="progress-meta">
+              <span>保存状态</span>
+              <strong id="dirtyText">已保存</strong>
+            </div>
+          </section>
+
+          <section class="card panel">
             <h2>导航</h2>
-            <div class="actions grid-3">
+            <div class="button-grid">
               <button id="firstBtn">首帧</button>
-              <button id="prevFastBtn">-36</button>
-              <button id="prevBtn">上一标注帧</button>
-              <button id="nextBtn">下一标注帧</button>
-              <button id="nextFastBtn">+36</button>
+              <button id="prevFastBtn">快退 36</button>
+              <button id="prevBtn">上一采样帧</button>
+              <button id="nextBtn">下一采样帧</button>
+              <button id="nextFastBtn">快进 36</button>
               <button id="lastBtn">末帧</button>
             </div>
           </section>
 
-          <section>
+          <section class="card panel">
             <h2>定位</h2>
-            <div class="field-row">
-              <label for="frameSlider">帧滑块</label>
+            <label class="field">
+              <span>帧滑块</span>
               <input id="frameSlider" type="range" min="0" max="0" value="0" />
-            </div>
-            <div class="field-row inline">
-              <label for="frameInput">跳转帧</label>
-              <input id="frameInput" type="number" min="0" step="1" value="0" />
+            </label>
+            <div class="jump-row">
+              <label class="field grow">
+                <span>跳转到帧</span>
+                <input id="frameInput" type="number" min="0" step="1" value="0" />
+              </label>
               <button id="jumpBtn">跳转</button>
             </div>
           </section>
 
-          <section>
-            <h2>当前标注</h2>
-            <div class="meta-card">
+          <section class="card panel">
+            <h2>当前帧信息</h2>
+            <div class="meta-list">
               <div><span>Ball</span><strong id="ballValue">0</strong></div>
               <div><span>x</span><strong id="xValue">-1.000</strong></div>
               <div><span>y</span><strong id="yValue">-1.000</strong></div>
             </div>
           </section>
 
-          <section>
-            <h2>快捷键</h2>
-            <ul class="shortcut-list">
-              <li><kbd>←</kbd> / <kbd>→</kbd> 上一标注帧 / 下一标注帧</li>
-              <li><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 快退 / 快进 36 个标注步长</li>
-              <li><kbd>Cmd</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 首帧 / 末帧</li>
-              <li><kbd>[</kbd> / <kbd>]</kbd> 首帧 / 末帧</li>
-              <li><kbd>S</kbd> 保存，<kbd>C</kbd> 标记无球，<kbd>U</kbd> 下一未标注</li>
+          <section class="card panel">
+            <h2>操作提示</h2>
+            <ul class="hint-list">
+              <li><kbd>←</kbd> / <kbd>→</kbd> 切换上一帧或下一采样帧</li>
+              <li><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 快速移动 36 个采样步长</li>
+              <li><kbd>S</kbd> 保存，<kbd>C</kbd> 标记无球，<kbd>U</kbd> 跳到下一未标注</li>
+              <li><kbd>[</kbd> / <kbd>]</kbd> 跳到首帧 / 末帧</li>
             </ul>
           </section>
         </aside>
