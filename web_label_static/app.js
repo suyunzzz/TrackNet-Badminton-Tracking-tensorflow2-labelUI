@@ -3,6 +3,9 @@ const state = {
   frameIndex: 0,
   width: 0,
   height: 0,
+  fps: 0,
+  labelHz: 10,
+  labelStep: 1,
   annotation: { ball: 0, x: -1, y: -1, labeled: false },
   dirty: false,
   image: null,
@@ -17,6 +20,8 @@ const els = {
   progressText: document.getElementById('progressText'),
   percentText: document.getElementById('percentText'),
   dirtyText: document.getElementById('dirtyText'),
+  labelRateText: document.getElementById('labelRateText'),
+  labelStepText: document.getElementById('labelStepText'),
   progressFill: document.getElementById('progressFill'),
   frameIndicator: document.getElementById('frameIndicator'),
   frameStatus: document.getElementById('frameStatus'),
@@ -75,6 +80,10 @@ function clampFrame(index) {
   return Math.max(0, Math.min(index, state.frameCount - 1));
 }
 
+function labelStep() {
+  return Math.max(1, Number(state.labelStep) || 1);
+}
+
 function renderCanvas() {
   ctx.clearRect(0, 0, els.frameCanvas.width, els.frameCanvas.height);
   if (state.image) {
@@ -124,8 +133,17 @@ async function loadState() {
   state.frameCount = payload.frame_count;
   state.width = payload.width;
   state.height = payload.height;
+  state.fps = Number(payload.fps) || 0;
+  state.labelHz = Number(payload.label_hz) || 10;
+  state.labelStep = Number(payload.label_step) || 1;
   els.videoName.textContent = payload.video_name;
   els.csvPath.textContent = payload.csv_path;
+  if (els.labelRateText) {
+    els.labelRateText.textContent = `${state.labelHz.toFixed(2)} Hz`;
+  }
+  if (els.labelStepText) {
+    els.labelStepText.textContent = `step ${labelStep()} frame(s)`;
+  }
   els.frameSlider.max = String(Math.max(payload.frame_count - 1, 0));
   els.frameInput.max = String(Math.max(payload.frame_count - 1, 0));
   els.frameCanvas.width = payload.width;
@@ -237,10 +255,10 @@ function bindActions() {
   els.nextUnlabeledBtn.addEventListener('click', () => jumpToNextUnlabeled().catch((error) => showToast(error.message, true)));
 
   els.firstBtn.addEventListener('click', () => loadFrame(0).catch((error) => showToast(error.message, true)));
-  els.prevBtn.addEventListener('click', () => loadFrame(state.frameIndex - 1).catch((error) => showToast(error.message, true)));
-  els.nextBtn.addEventListener('click', () => loadFrame(state.frameIndex + 1).catch((error) => showToast(error.message, true)));
-  els.prevFastBtn.addEventListener('click', () => loadFrame(state.frameIndex - 36).catch((error) => showToast(error.message, true)));
-  els.nextFastBtn.addEventListener('click', () => loadFrame(state.frameIndex + 36).catch((error) => showToast(error.message, true)));
+  els.prevBtn.addEventListener('click', () => loadFrame(state.frameIndex - labelStep()).catch((error) => showToast(error.message, true)));
+  els.nextBtn.addEventListener('click', () => loadFrame(state.frameIndex + labelStep()).catch((error) => showToast(error.message, true)));
+  els.prevFastBtn.addEventListener('click', () => loadFrame(state.frameIndex - (36 * labelStep())).catch((error) => showToast(error.message, true)));
+  els.nextFastBtn.addEventListener('click', () => loadFrame(state.frameIndex + (36 * labelStep())).catch((error) => showToast(error.message, true)));
   els.lastBtn.addEventListener('click', () => loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true)));
 
   els.frameSlider.addEventListener('input', () => {
@@ -276,10 +294,10 @@ function bindActions() {
       loadFrame(state.frameCount - 1).catch((error) => showToast(error.message, true));
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
-      loadFrame(state.frameIndex + (event.shiftKey ? 36 : 1)).catch((error) => showToast(error.message, true));
+      loadFrame(state.frameIndex + (event.shiftKey ? 36 * labelStep() : labelStep())).catch((error) => showToast(error.message, true));
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      loadFrame(state.frameIndex - (event.shiftKey ? 36 : 1)).catch((error) => showToast(error.message, true));
+      loadFrame(state.frameIndex - (event.shiftKey ? 36 * labelStep() : labelStep())).catch((error) => showToast(error.message, true));
     } else if (event.key === 'Home') {
       event.preventDefault();
       loadFrame(0).catch((error) => showToast(error.message, true));

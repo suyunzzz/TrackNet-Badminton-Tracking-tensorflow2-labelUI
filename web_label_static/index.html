@@ -27,6 +27,10 @@
             <span id="percentText">0%</span>
             <span id="dirtyText">已保存</span>
           </div>
+          <div class="progress-meta">
+            <span id="labelRateText">10.00 Hz</span>
+            <span id="labelStepText">step 1 frame(s)</span>
+          </div>
         </div>
       </header>
 
@@ -35,7 +39,7 @@
           <div class="viewer-toolbar">
             <div class="frame-summary">
               <strong id="frameIndicator">Frame 0 / 0</strong>
-              <span id="frameStatus" class="status-pill">未标注</span>
+              <span id="frameStatus" class="status-pill">未检查</span>
             </div>
             <div class="actions compact">
               <button id="saveBtn" class="primary">保存 (S)</button>
@@ -52,7 +56,7 @@
           <div class="tips">
             <span>左键点击：标注球心</span>
             <span>右键点击：标记当前帧无球</span>
-            <span>Shift + 左右方向键：快进/快退 36 帧</span>
+            <span>方向键按当前标注频率步进，Shift + 方向键为 36 个标注步长</span>
           </div>
         </section>
 
@@ -60,12 +64,12 @@
           <section>
             <h2>导航</h2>
             <div class="actions grid-3">
-              <button id="firstBtn">首帧 (⌘←)</button>
+              <button id="firstBtn">首帧</button>
               <button id="prevFastBtn">-36</button>
-              <button id="prevBtn">上一帧 (←)</button>
-              <button id="nextBtn">下一帧 (→)</button>
+              <button id="prevBtn">上一标注帧</button>
+              <button id="nextBtn">下一标注帧</button>
               <button id="nextFastBtn">+36</button>
-              <button id="lastBtn">末帧 (⌘→)</button>
+              <button id="lastBtn">末帧</button>
             </div>
           </section>
 
@@ -94,10 +98,10 @@
           <section>
             <h2>快捷键</h2>
             <ul class="shortcut-list">
-              <li><kbd>←</kbd> / <kbd>→</kbd> 上一帧 / 下一帧</li>
-              <li><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 快退 / 快进 36 帧</li>
-              <li><kbd>⌘</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 首帧 / 末帧</li>
-              <li><kbd>[</kbd> / <kbd>]</kbd> 首帧 / 末帧（备用）</li>
+              <li><kbd>←</kbd> / <kbd>→</kbd> 上一标注帧 / 下一标注帧</li>
+              <li><kbd>Shift</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 快退 / 快进 36 个标注步长</li>
+              <li><kbd>Cmd</kbd> + <kbd>←</kbd> / <kbd>→</kbd> 首帧 / 末帧</li>
+              <li><kbd>[</kbd> / <kbd>]</kbd> 首帧 / 末帧</li>
               <li><kbd>S</kbd> 保存，<kbd>C</kbd> 标记无球，<kbd>U</kbd> 下一未标注</li>
             </ul>
           </section>

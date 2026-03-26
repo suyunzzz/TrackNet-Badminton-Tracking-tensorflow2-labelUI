@@ -26,6 +26,13 @@ else:
 cap = cv2.VideoCapture(video_path)
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+label_hz = float(args.label_hz)
+if label_hz <= 0:
+    print("label_hz must be greater than 0")
+    sys.exit(1)
+frame_step = max(1, int(round(float(fps) / label_hz))) if fps > 0 else 1
+fast_step = frame_step * 36
+print("Label frequency: {:.3f} Hz, navigation step: {} frame(s)".format(label_hz, frame_step))
 
 if load_csv:
     info = load_info(csv_path)
@@ -56,12 +63,12 @@ else:
 # # # # # # # # # # # # # # # #
 # e: exit program             #
 # s: save info                #
-# n: next frame               #
-# p: previous frame           #
+# n: next label frame         #
+# p: previous label frame     #
 # f: to first frame           #
 # l: to last frame            #
-# >: fast forward 36 frames   #
-# <: fast backward 36 frames  #
+# >: fast forward 36 labels   #
+# <: fast backward 36 labels  #
 # # # # # # # # # # # # # # # #
 
 def ball_label(event, x, y, flags, param):
@@ -116,7 +123,7 @@ while True:
         if frame_no >= n_frames-1:
             print("This is the last frame")
             continue
-        frame_no += 1
+        frame_no = min(frame_no + frame_step, n_frames-1)
         image = go2frame(cap, frame_no, info)
         print("Frame No.{}".format(frame_no))
 
@@ -124,7 +131,7 @@ while True:
         if frame_no == 0:
             print("This is the first frame")
             continue
-        frame_no -= 1
+        frame_no = max(frame_no - frame_step, 0)
         image = go2frame(cap, frame_no, info)
         print("Frame No.{}".format(frame_no))
 
@@ -145,20 +152,20 @@ while True:
         print("Frame No.{}".format(frame_no))
 
     elif key == ord('>'):
-        if frame_no + 36 >= n_frames-1:
+        if frame_no + fast_step >= n_frames-1:
             print("Reach last frame")
             frame_no = n_frames-1
         else:
-            frame_no += 36
+            frame_no += fast_step
         image = go2frame(cap, frame_no, info)
         print("Frame No.{}".format(frame_no))
 
     elif key == ord('<'):
-        if frame_no - 36 <= 0:
+        if frame_no - fast_step <= 0:
             print("Reach first frame")
             frame_no = 0
         else:
-            frame_no -= 36
+            frame_no -= fast_step
         image = go2frame(cap, frame_no, info)
         print("Frame No.{}".format(frame_no))
     else:

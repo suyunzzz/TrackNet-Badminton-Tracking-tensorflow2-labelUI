@@ -45,6 +45,8 @@ parser.add_argument('--label_video_path', type=str, default='test/test.mp4',
                     help='video path to label')
 parser.add_argument('--csv_path', type=str, default='',
                     help='load csv have labeled')
+parser.add_argument('--label_hz', type=float, default=10.0,
+                    help='target labeling frequency in hz(default: 10.0)')
 
 # parser for predict
 parser.add_argument('--video_path', type=str, default='test/test.mp4',

@@ -107,15 +107,16 @@ TP, FP1, FP2, TN, FN are defined as below:
 |--------------|--------|   
 |e|exit program|
 |s|save csv|
-|n|go to next frame|
-|p|back to previous frame|
+|n|go to next label frame|
+|p|back to previous label frame|
 |f|go to first frame|
 |l|go to last frame|
-|>|fast forward 36 frames|
-|<|fast backward 36 frames|   
+|>|fast forward 36 label steps|
+|<|fast backward 36 label steps|   
 
-3. If you want to load pre-labeled csv file, change `load_csv` in `imgLabel.py` to **True**.    
-4. After label all frames, press `s` to save file and then press `e` to leave the program.
+3. Label frequency can be controlled by `--label_hz`, default is `10`, which means one label step every `0.1s`. The actual frame step is computed from video fps automatically.    
+4. If you want to load pre-labeled csv file, change `load_csv` in `imgLabel.py` to **True**.    
+5. After label all frames, press `s` to save file and then press `e` to leave the program.
 
 ### Web Label
 If you prefer labeling in a browser, use the web-based labeling UI.
@@ -134,6 +135,7 @@ Optional arguments:
 
 - `--label_video_path`: input video path to label
 - `--csv_path`: output csv path to load/save labels
+- `--label_hz`: target labeling frequency, default is `10`, meaning one label step every `0.1s`
 - `--host`: server host, default is `127.0.0.1`
 - `--port`: server port, default is `8000`
 
@@ -147,7 +149,7 @@ If `--csv_path` is not provided, the tool will save to a csv file with the same 
 - Click on the frame to label the shuttlecock center
 - Mark a frame as no-ball
 - Jump to the next unchecked frame
-- Fast navigation between frames
+- Fast navigation between sampled label frames
 - Autosave after editing for better usability
 - Support responsive browser layout for easier use on different screen sizes
 
@@ -170,8 +172,8 @@ In the web UI, each frame can be in one of the following states:
 
 |Keyboard Event|Function|
 |--------------|--------|
-|`←` / `→`|Previous / next frame|
-|`Shift + ←` / `Shift + →`|Fast backward / forward 36 frames|
+|`←` / `→`|Previous / next sampled label frame|
+|`Shift + ←` / `Shift + →`|Fast backward / forward 36 sampled label steps|
 |`⌘ + ←` / `⌘ + →`|Jump to first / last frame on Mac|
 |`[` / `]`|Alternative shortcut for first / last frame|
 |`S`|Save current labels|

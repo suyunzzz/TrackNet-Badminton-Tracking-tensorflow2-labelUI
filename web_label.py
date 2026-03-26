@@ -36,8 +36,16 @@ def resolve_csv_path(video_path, csv_path):
     return os.path.splitext(os.path.abspath(video_path))[0] + '.csv'
 
 
+def compute_label_step(fps, label_hz):
+    if label_hz <= 0:
+        raise ValueError('label_hz must be greater than 0')
+    if fps <= 0:
+        return 1
+    return max(1, int(round(float(fps) / float(label_hz))))
+
+
 class LabelSession:
-    def __init__(self, video_path, csv_path):
+    def __init__(self, video_path, csv_path, label_hz):
         self.video_path = os.path.abspath(video_path)
         self.video_name = os.path.basename(self.video_path)
         self.csv_path = resolve_csv_path(self.video_path, csv_path)
@@ -53,6 +61,9 @@ class LabelSession:
         self.n_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.label_hz = float(label_hz)
+        self.label_step = compute_label_step(self.fps, self.label_hz)
+        self.target_frames = set(range(0, self.n_frames, self.label_step))
         self.info, csv_loaded = self._load_or_init_info()
         self.reviewed_frames = self._load_reviewed_frames(csv_loaded)
         self.dirty = False
@@ -99,9 +110,12 @@ class LabelSession:
         }
 
     def get_progress(self):
-        reviewed = len(self.reviewed_frames)
-        positive = sum(1 for item in self.info.values() if item['Ball'] == 1 and item['x'] >= 0 and item['y'] >= 0)
-        total = self.n_frames
+        reviewed = len(self.reviewed_frames & self.target_frames)
+        positive = sum(
+            1 for frame_no, item in self.info.items()
+            if frame_no in self.target_frames and item['Ball'] == 1 and item['x'] >= 0 and item['y'] >= 0
+        )
+        total = len(self.target_frames)
         return {
             'labeled': reviewed,
             'positive': positive,
@@ -117,6 +131,8 @@ class LabelSession:
                 'video_name': self.video_name,
                 'csv_path': self.csv_path,
                 'fps': self.fps,
+                'label_hz': self.label_hz,
+                'label_step': self.label_step,
                 'frame_count': self.n_frames,
                 'width': self.width,
                 'height': self.height,
@@ -189,13 +205,12 @@ class LabelSession:
     def next_unlabeled(self, current_frame, direction=1):
         with self.state_lock:
             self._check_frame_no(current_frame)
-            if direction >= 0:
-                iterator = range(current_frame + 1, self.n_frames)
-            else:
-                iterator = range(current_frame - 1, -1, -1)
+            current_target = self.align_frame(current_frame)
+            step = self.label_step if direction >= 0 else -self.label_step
+            iterator = range(current_target + step, self.n_frames if direction >= 0 else -1, step)
 
             for idx in iterator:
-                if idx not in self.reviewed_frames:
+                if idx in self.target_frames and idx not in self.reviewed_frames:
                     return {'frame': idx, 'found': True}
             return {'frame': current_frame, 'found': False}
 
@@ -214,6 +229,10 @@ class LabelSession:
     def _check_frame_no(self, frame_no):
         if frame_no < 0 or frame_no >= self.n_frames:
             raise ValueError('Frame {} out of range [0, {})'.format(frame_no, self.n_frames))
+
+    def align_frame(self, frame_no):
+        aligned = int(round(frame_no / self.label_step)) * self.label_step
+        return max(0, min(aligned, self.n_frames - 1))
 
 
 class LabelRequestHandler(BaseHTTPRequestHandler):
@@ -316,13 +335,14 @@ def main():
     if not os.path.isfile(video_path) or not video_path.endswith('.mp4'):
         raise ValueError('Not a valid video path! Please modify --label_video_path.')
 
-    session = LabelSession(video_path, args.csv_path)
+    session = LabelSession(video_path, args.csv_path, args.label_hz)
     LabelRequestHandler.session = session
     server = ThreadingHTTPServer((args.host, args.port), LabelRequestHandler)
     url = 'http://{}:{}/'.format(args.host, args.port)
     print('Web label server is running at {}'.format(url))
     print('Video: {}'.format(session.video_path))
     print('CSV  : {}'.format(session.csv_path))
+    print('Label: {:.3f} Hz, step {} frame(s)'.format(session.label_hz, session.label_step))
     print('Keyboard shortcuts are available inside the page.')
     try:
         server.serve_forever()
