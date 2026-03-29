@@ -2,12 +2,12 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
-pythonExe = fso.BuildPath(fso.GetParentFolderName(scriptDir), "venv\Scripts\python.exe")
+launcherPath = fso.BuildPath(scriptDir, "start_web_label.bat")
 
-If Not fso.FileExists(pythonExe) Then
-  MsgBox "Python executable was not found in the parent venv:" & vbCrLf & pythonExe, 16, "Launch failed"
+If Not fso.FileExists(launcherPath) Then
+  MsgBox "Launcher was not found:" & vbCrLf & launcherPath, 16, "Launch failed"
   WScript.Quit 1
 End If
 
-command = """" & pythonExe & """ """ & fso.BuildPath(scriptDir, "web_label.py") & """ --label_video_path="
-shell.Run command, 0, False
+command = "cmd /c """ & launcherPath & """"
+shell.Run command, 1, False

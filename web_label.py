@@ -1,6 +1,7 @@
 import json
 import mimetypes
 import os
+import sys
 import threading
 import webbrowser
 from http import HTTPStatus
@@ -341,7 +342,11 @@ class SessionManager:
 
 class LabelRequestHandler(BaseHTTPRequestHandler):
     manager = None
-    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web_label_static')
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_dir = os.path.join(base_dir, 'web_label_static')
 
     def do_GET(self):
         parsed = urlparse(self.path)

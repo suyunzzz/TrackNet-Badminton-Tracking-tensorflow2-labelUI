@@ -131,6 +131,47 @@ python web_label.py --label_video_path test/test.mp4 --csv_path test/test.csv
 
 Then open `http://127.0.0.1:8000/` in your browser.
 
+#### One-click launchers
+
+For non-engineer users, this repo now includes simple launchers for the web label tool:
+
+- Windows: double click `start_web_label.bat`
+- Windows (alternative): double click `打开标注工具.vbs`
+- macOS: double click `start_web_label.command`
+
+What these launchers do:
+
+- create a local `venv` automatically if missing
+- install the packages from `requirements.txt`
+- start `web_label.py`
+- open the browser automatically
+
+Notes:
+
+- Python 3 must already be installed on the machine
+- On first launch, dependency installation may take a while
+- If no video path is passed, the browser UI can select an mp4 file interactively
+
+#### No-Python distribution
+
+If you want to distribute the label tool to users who do not have Python installed, package it into a standalone executable first.
+
+Build commands:
+
+- macOS: `./package_web_label.sh`
+- Windows: `package_web_label.bat`
+
+Packaging output:
+
+- macOS executable: `dist/web_label`
+- Windows executable: `dist/web_label.exe`
+
+Important constraints:
+
+- You should build on the same target OS you plan to distribute to
+- In practice: build Windows packages on Windows, and macOS packages on macOS
+- The packaged app still needs the browser, but no separate Python installation is required
+
 Optional arguments:
 
 - `--label_video_path`: input video path to label
